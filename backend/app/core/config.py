@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     
     # Database: can be PostgreSQL or local SQLite for testing
     database_url: str = os.getenv("DATABASE_URL", "sqlite:///./app.db")
-    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    cors_origins: str = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
     
     # Provider Keys (optional - if omitted, provider reports unconfigured status)
     tavily_api_key: str | None = None

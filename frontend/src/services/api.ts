@@ -350,13 +350,13 @@ export async function fetchReportSummary(websiteId: string): Promise<ReportSumma
 }
 
 export function getExportCsvUrl(auditId: string): string {
-  return `/api/reports/export/csv/${auditId}`;
+  return `${API_BASE}/reports/export/csv/${auditId}`;
 }
 
 export function getExportPdfUrl(auditId: string): string {
-  return `/api/reports/export/pdf/${auditId}`;
+  return `${API_BASE}/reports/export/pdf/${auditId}`;
 }
 
 export function getExportHtmlUrl(auditId: string): string {
-  return `/api/reports/export/html/${auditId}`;
+  return `${API_BASE}/reports/export/html/${auditId}`;
 }
