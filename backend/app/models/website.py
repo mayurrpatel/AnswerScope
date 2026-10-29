@@ -17,6 +17,8 @@ class Website(Base):
     domain = Column(String(255), nullable=False, unique=True, index=True)
     name = Column(String(255), nullable=False)
     canonical_url = Column(String(2048), nullable=False)
+    description = Column(Text, nullable=True)
+    target_audience = Column(String(500), nullable=True)
     
     # Brand details
     brand_aliases = Column(JSON, default=list)  # list of strings: ["Scalezix", "Scale Zix", "scalezix.com"]

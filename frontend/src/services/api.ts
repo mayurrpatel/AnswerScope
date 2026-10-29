@@ -2,7 +2,7 @@ import axios from "axios";
 
 const API_BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : "/api";
 
-export const api = axios.create({ baseURL: API_BASE, timeout: 25000 });
+export const api = axios.create({ baseURL: API_BASE, timeout: 60000 });
 
 export interface HealthResponse {
   status: string;
@@ -16,6 +16,8 @@ export interface Website {
   name: string;
   canonical_url: string;
   domain: string;
+  description?: string;
+  target_audience?: string;
   brand_aliases: string[];
   competitor_domains: string[];
   robots_txt_respected: boolean;
@@ -72,6 +74,9 @@ export interface QuestionAuditResult {
   relevant_page_urls: string[];
   evidence_snippets: Array<{ url: string; text: string; context?: string; score: number }>;
   missing_subtopics: string[];
+  suggested_headings?: string[];
+  suggested_schema_types?: string[];
+  owner_confirmation_needed?: boolean;
   confidence_level: number;
   explanation?: string;
 }
@@ -81,6 +86,8 @@ export interface AuditRecommendation {
   audit_id: string;
   question_id?: string;
   affected_page_url?: string;
+  target_query?: string;
+  identified_gap?: string;
   issue: string;
   supporting_evidence: string;
   why_it_helps: string;
@@ -88,6 +95,8 @@ export interface AuditRecommendation {
   priority: "critical" | "high" | "medium" | "low";
   estimated_effort: "low" | "medium" | "high";
   is_ai_generated: boolean;
+  owner_confirmation_note?: string;
+  created_at: string;
 }
 
 export interface AnswerReadinessAudit {
@@ -102,11 +111,22 @@ export interface AnswerReadinessAudit {
   partially_answered_count: number;
   unanswered_count: number;
   confidence_score: number;
+  scoring_methodology?: Record<string, any>;
   started_at?: string;
   finished_at?: string;
   created_at: string;
   question_results?: QuestionAuditResult[];
   recommendations?: AuditRecommendation[];
+}
+
+export interface QuickAuditPayload {
+  url: string;
+  name?: string;
+  description?: string;
+  target_audience?: string;
+  questions: string[];
+  max_pages?: number;
+  respect_robots_txt?: boolean;
 }
 
 export interface VisibilityCitation {
@@ -265,6 +285,16 @@ export async function runAudit(websiteId: string, crawlJobId?: string): Promise<
   return data;
 }
 
+export async function quickRunAudit(payload: QuickAuditPayload): Promise<AnswerReadinessAudit> {
+  const { data } = await api.post<AnswerReadinessAudit>("/audits/quick-run", payload);
+  return data;
+}
+
+export async function seedSampleAudit(): Promise<AnswerReadinessAudit> {
+  const { data } = await api.post<AnswerReadinessAudit>("/audits/seed-sample");
+  return data;
+}
+
 export async function fetchAudits(websiteId?: string): Promise<AnswerReadinessAudit[]> {
   const params = websiteId ? { website_id: websiteId } : {};
   const { data } = await api.get<AnswerReadinessAudit[]>("/audits", { params });
@@ -325,4 +355,8 @@ export function getExportCsvUrl(auditId: string): string {
 
 export function getExportPdfUrl(auditId: string): string {
   return `/api/reports/export/pdf/${auditId}`;
+}
+
+export function getExportHtmlUrl(auditId: string): string {
+  return `/api/reports/export/html/${auditId}`;
 }

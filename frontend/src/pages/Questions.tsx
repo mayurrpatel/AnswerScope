@@ -247,7 +247,24 @@ export function Questions() {
 
             {batchMode ? (
               <div>
-                <Label>Question List (one question per line)</Label>
+                <div className="flex justify-between items-center mb-1">
+                  <Label>Question List (one question per line)</Label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setBatchTexts([
+                        "What services does this company provide?",
+                        "How much does this service cost?",
+                        "How does this product work?",
+                        "What are the benefits of this service?",
+                        "How does this company compare with alternatives?",
+                      ].join("\n"))
+                    }
+                    className="text-xs text-primary hover:underline font-medium"
+                  >
+                    Insert 5 Example Questions
+                  </button>
+                </div>
                 <Textarea
                   required
                   rows={5}

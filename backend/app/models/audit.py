@@ -62,6 +62,9 @@ class QuestionAuditResult(Base):
     relevant_page_urls = Column(JSON, default=list)  # list of strings
     evidence_snippets = Column(JSON, default=list)  # list of {url, text, context, score}
     missing_subtopics = Column(JSON, default=list)  # list of strings
+    suggested_headings = Column(JSON, default=list)  # recommended headings for content gap
+    suggested_schema_types = Column(JSON, default=list)  # suggested Schema.org types
+    owner_confirmation_needed = Column(Boolean, default=False)
     
     confidence_level = Column(Float, default=0.0)
     explanation = Column(Text, nullable=True)
@@ -79,14 +82,17 @@ class AuditRecommendation(Base):
     audit_id = Column(String(36), ForeignKey("answer_readiness_audits.id", ondelete="CASCADE"), nullable=False, index=True)
     question_id = Column(String(36), ForeignKey("target_questions.id", ondelete="SET NULL"), nullable=True, index=True)
     affected_page_url = Column(String(2048), nullable=True)
+    target_query = Column(String(500), nullable=True)
+    identified_gap = Column(Text, nullable=True)
     
     issue = Column(String(500), nullable=False)
     supporting_evidence = Column(Text, nullable=False)
     why_it_helps = Column(Text, nullable=False)
     suggested_action = Column(Text, nullable=False)
     priority = Column(String(20), default="medium")  # critical, high, medium, low
-    estimated_effort = Column(String(20), default="medium")  # low, medium, high (clearly an estimate)
+    estimated_effort = Column(String(20), default="medium")  # low, medium, high
     is_ai_generated = Column(Boolean, default=False)
+    owner_confirmation_note = Column(Text, nullable=True)
     
     created_at = Column(DateTime, default=datetime.utcnow)
 

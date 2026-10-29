@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 
-from app.api import health, websites, questions, crawler, audits, visibility, competitors, reports
+from app.api import health, websites, questions, crawler, audits, visibility, competitors, reports, sample_site
 from app.core.config import settings
 from app.db.session import init_db
 
@@ -25,7 +25,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description="Full-stack AI Search Visibility & Answer Engine Audit Platform API",
+    description="AnswerScope — AI Search Visibility & Answer Engine Audit Platform API",
     lifespan=lifespan,
 )
 
@@ -48,3 +48,4 @@ app.include_router(audits.router, prefix="/api")
 app.include_router(visibility.router, prefix="/api")
 app.include_router(competitors.router, prefix="/api")
 app.include_router(reports.router, prefix="/api")
+app.include_router(sample_site.router, prefix="/api")

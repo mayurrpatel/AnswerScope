@@ -4,6 +4,7 @@ import httpx
 import logging
 from typing import List, Dict, Any, Set
 from collections import deque
+from pathlib import Path
 
 from app.services.crawler.security import normalize_url, validate_url_security, extract_domain
 from app.services.crawler.robots import RobotsChecker
@@ -38,9 +39,85 @@ class AsyncCrawler:
         self.timeout = timeout
         self.robots_checker = RobotsChecker()
 
+    def _crawl_sample_site(self) -> CrawlResult:
+        """Crawl the local offline sample website deterministically without network access."""
+        sample_dir = Path(__file__).resolve().parent.parent.parent / "sample_site"
+        mapping = {
+            "https://sample-site.nexusflow.io/": "index.html",
+            "https://sample-site.nexusflow.io": "index.html",
+            "https://sample-site.nexusflow.io/index.html": "index.html",
+            "https://sample-site.nexusflow.io/services.html": "services.html",
+            "https://sample-site.nexusflow.io/pricing.html": "pricing.html",
+            "https://sample-site.nexusflow.io/faq.html": "faq.html",
+            "https://sample-site.nexusflow.io/comparisons.html": "comparisons.html",
+        }
+
+        visited: Set[str] = set()
+        queue: deque = deque([(self.base_url, 0)])
+        crawled_pages: List[Dict[str, Any]] = []
+
+        while queue and len(crawled_pages) < self.max_pages:
+            current_url, depth = queue.popleft()
+            if current_url in visited:
+                continue
+            visited.add(current_url)
+
+            # Robots.txt disallowed path check
+            if self.respect_robots_txt and ("/admin" in current_url or "/private" in current_url):
+                logger.info(f"Sample robots.txt disallowed: {current_url}")
+                continue
+
+            file_name = mapping.get(current_url)
+            if not file_name:
+                crawled_pages.append({
+                    "url": current_url,
+                    "canonical_url": None,
+                    "status_code": 404,
+                    "title": None,
+                    "meta_description": None,
+                    "language": None,
+                    "headings": {"h1": [], "h2": [], "h3": []},
+                    "body_text": "",
+                    "structured_data": [],
+                    "word_count": 0,
+                    "response_time_ms": 12.0,
+                })
+                continue
+
+            file_path = sample_dir / file_name
+            if not file_path.exists():
+                continue
+
+            html_text = file_path.read_text(encoding="utf-8")
+            parsed = parse_html(current_url, html_text, self.domain)
+            crawled_pages.append({
+                "url": current_url,
+                "canonical_url": parsed.canonical_url,
+                "status_code": 200,
+                "title": parsed.title,
+                "meta_description": parsed.meta_description,
+                "language": parsed.language,
+                "headings": parsed.headings,
+                "body_text": parsed.body_text,
+                "structured_data": parsed.structured_data,
+                "word_count": parsed.word_count,
+                "response_time_ms": 28.5,
+            })
+
+            if depth < self.max_depth:
+                for link in parsed.internal_links:
+                    if link not in visited:
+                        queue.append((link, depth + 1))
+
+        return CrawlResult(crawled_pages)
+
     async def crawl(self) -> CrawlResult:
         if not validate_url_security(self.base_url):
             return CrawlResult([], error_message=f"Security check failed: Destination '{self.base_url}' is not permitted.")
+
+        # Offline deterministic sample mode
+        if self.domain == "sample-site.nexusflow.io":
+            return self._crawl_sample_site()
 
         visited: Set[str] = set()
         queue: deque = deque([(self.base_url, 0)])  # (url, depth)

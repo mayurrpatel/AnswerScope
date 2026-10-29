@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from sqlalchemy.engine import Engine
 from typing import Generator
@@ -56,6 +56,38 @@ def check_database() -> str:
 
 
 def init_db() -> None:
-    """Initializes tables using metadata."""
+    """Initializes tables using metadata and ensures backward-compatible columns exist."""
     engine = get_engine()
     Base.metadata.create_all(bind=engine)
+    try:
+        insp = inspect(engine)
+        tables = set(insp.get_table_names())
+        with engine.connect() as conn:
+            if "websites" in tables:
+                cols = {c["name"] for c in insp.get_columns("websites")}
+                if "description" not in cols:
+                    conn.execute(text("ALTER TABLE websites ADD COLUMN description TEXT"))
+                if "target_audience" not in cols:
+                    conn.execute(text("ALTER TABLE websites ADD COLUMN target_audience VARCHAR(500)"))
+
+            if "question_audit_results" in tables:
+                cols = {c["name"] for c in insp.get_columns("question_audit_results")}
+                if "suggested_headings" not in cols:
+                    conn.execute(text("ALTER TABLE question_audit_results ADD COLUMN suggested_headings TEXT DEFAULT '[]'"))
+                if "suggested_schema_types" not in cols:
+                    conn.execute(text("ALTER TABLE question_audit_results ADD COLUMN suggested_schema_types TEXT DEFAULT '[]'"))
+                if "owner_confirmation_needed" not in cols:
+                    conn.execute(text("ALTER TABLE question_audit_results ADD COLUMN owner_confirmation_needed BOOLEAN DEFAULT 0"))
+
+            if "audit_recommendations" in tables:
+                cols = {c["name"] for c in insp.get_columns("audit_recommendations")}
+                if "target_query" not in cols:
+                    conn.execute(text("ALTER TABLE audit_recommendations ADD COLUMN target_query VARCHAR(500)"))
+                if "identified_gap" not in cols:
+                    conn.execute(text("ALTER TABLE audit_recommendations ADD COLUMN identified_gap TEXT"))
+                if "owner_confirmation_note" not in cols:
+                    conn.execute(text("ALTER TABLE audit_recommendations ADD COLUMN owner_confirmation_note TEXT"))
+
+            conn.commit()
+    except Exception as e:
+        logger.warning(f"Schema column check skipped or failed: {e}")

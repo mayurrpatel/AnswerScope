@@ -36,6 +36,9 @@ class QuestionEvaluationResult:
         confidence_level: float,
         explanation: str,
         recommendations: List[Dict[str, Any]],
+        suggested_headings: List[str] | None = None,
+        suggested_schema_types: List[str] | None = None,
+        owner_confirmation_needed: bool = False,
     ):
         self.question_id = question_id
         self.readiness_score = readiness_score
@@ -54,6 +57,9 @@ class QuestionEvaluationResult:
         self.confidence_level = confidence_level
         self.explanation = explanation
         self.recommendations = recommendations
+        self.suggested_headings = suggested_headings or []
+        self.suggested_schema_types = suggested_schema_types or []
+        self.owner_confirmation_needed = owner_confirmation_needed
 
 
 def evaluate_question_readiness(
@@ -65,17 +71,34 @@ def evaluate_question_readiness(
     """
     Evaluates website content answer-readiness for a target question.
     Scoring rubric (0-100 total):
-      1. Direct Answer Presence: 0-30 pts
+      1. Direct Answer Presence & Placement: 0-30 pts
       2. Content Depth & Coverage: 0-30 pts
       3. Structured Data: 0-15 pts
-      4. Heading & Structure: 0-15 pts
-      5. Evidence Clarity & Source: 0-10 pts
+      4. Heading Hierarchy & Structure: 0-15 pts
+      5. Evidence Clarity & Specificity: 0-10 pts
     """
     ranked = match_question_to_pages(question_text, crawled_pages)
     recommendations: List[Dict[str, Any]] = []
 
+    # Clean question text for heading suggestions
+    clean_q = question_text.strip()
+    clean_q_no_q = clean_q.rstrip("?")
+
     if not ranked:
         # No relevant page found
+        rec = {
+            "issue": f"Question completely unanswered across crawled pages.",
+            "target_query": clean_q,
+            "supporting_evidence": f"Zero matching content for query: '{clean_q}' across {len(crawled_pages)} analyzed pages.",
+            "identified_gap": "Missing dedicated answer page, section, or FAQ entry for this query.",
+            "why_it_helps": "Search and answer engines cannot cite or surface a website if relevant content does not exist.",
+            "suggested_action": f"Create a dedicated page or FAQ section explicitly titled: '{clean_q}'.",
+            "priority": "critical",
+            "estimated_effort": "medium",
+            "is_ai_generated": False,
+            "affected_page_url": None,
+            "owner_confirmation_note": "Requires website owner to provide verified factual information answering this question.",
+        }
         return QuestionEvaluationResult(
             question_id=question_id,
             readiness_score=0.0,
@@ -90,26 +113,20 @@ def evaluate_question_readiness(
             evidence_quality_score=0.0,
             relevant_page_urls=[],
             evidence_snippets=[],
-            missing_subtopics=["Core answer content", "Dedicated page or section"],
+            missing_subtopics=["Core answer content", "Dedicated section or FAQ"],
             confidence_level=0.90,
-            explanation="None of the crawled website pages contain content relevant to this question.",
-            recommendations=[{
-                "issue": "Question completely unanswered across crawled pages.",
-                "supporting_evidence": f"Zero matching content for query: '{question_text}'",
-                "why_it_helps": "Search engines and AI answer engines cannot cite a brand if no relevant content exists.",
-                "suggested_action": f"Create a dedicated page or FAQ section specifically answering: '{question_text}'.",
-                "priority": "critical",
-                "estimated_effort": "medium",
-                "is_ai_generated": False,
-                "affected_page_url": None,
-            }],
+            explanation=f"None of the {len(crawled_pages)} crawled pages contain content relevant to '{clean_q}'.",
+            recommendations=[rec],
+            suggested_headings=[f"## {clean_q}", f"### How {clean_q_no_q} Works"],
+            suggested_schema_types=["FAQPage", "Article"],
+            owner_confirmation_needed=True,
         )
 
     best_page, match_score = ranked[0]
     relevant_urls = [p[0]["url"] for p in ranked[:3]]
 
     # 1. Direct answer detection & clarity (0-30 pts)
-    snippets = extract_evidence_snippets(question_text, best_page, max_snippets=3)
+    snippets = extract_evidence_snippets(clean_q, best_page, max_snippets=3)
     direct_answer_found = False
     direct_answer_snippet = None
     clarity_score = 0.0
@@ -146,32 +163,44 @@ def evaluate_question_readiness(
     structured_data = best_page.get("structured_data", [])
     structured_data_present = len(structured_data) > 0
     structured_data_score = 0.0
+    detected_types = []
 
     if structured_data_present:
         structured_data_score = 10.0
-        # Check if FAQPage, Article, HowTo or Product
         for sd in structured_data:
             sd_type = str(sd.get("@type", "")).lower()
-            if any(t in sd_type for t in ["faq", "howto", "article", "product", "qa"]):
+            detected_types.append(sd.get("@type", ""))
+            if any(t in sd_type for t in ["faq", "howto", "article", "product", "service", "qa"]):
                 structured_data_score = 15.0
                 break
     else:
         structured_data_score = 0.0
+        rec_schema = "FAQPage" if "how" in clean_q.lower() or "what" in clean_q.lower() else "Article"
+        if "cost" in clean_q.lower() or "price" in clean_q.lower():
+            rec_schema = "Product"
+        elif "service" in clean_q.lower():
+            rec_schema = "Service"
+
         recommendations.append({
-            "issue": "Missing Schema.org structured data on relevant page.",
-            "supporting_evidence": f"Page {best_page['url']} lacks JSON-LD FAQPage, Article, or Product schema.",
-            "why_it_helps": "AI search engines prioritize structured data for snippet generation and answer synthesis.",
-            "suggested_action": "Add Schema.org JSON-LD markup (such as FAQPage or Article) to explicitly define answers.",
-            "priority": "high",
+            "issue": f"Missing Schema.org structured data on relevant page.",
+            "target_query": clean_q,
+            "supporting_evidence": f"Page '{best_page['url']}' contains no JSON-LD schema markup.",
+            "identified_gap": f"Lack of machine-readable {rec_schema} schema for answer engines.",
+            "why_it_helps": "Structured data allows AI answer engines to reliably parse question-and-answer pairs without parsing ambiguity.",
+            "suggested_action": f"Add Schema.org JSON-LD markup ({rec_schema}) to explicitly structure key answers on this page.",
+            "priority": "medium",
             "estimated_effort": "low",
             "is_ai_generated": False,
             "affected_page_url": best_page["url"],
+            "owner_confirmation_note": "Requires website owner to confirm the primary entity type and schema properties.",
         })
 
     # 4. Heading structure (0-15 pts)
     headings = best_page.get("headings", {})
-    h1_count = len(headings.get("h1", []))
-    h2_count = len(headings.get("h2", []))
+    h1_list = headings.get("h1", [])
+    h2_list = headings.get("h2", [])
+    h1_count = len(h1_list)
+    h2_count = len(h2_list)
     heading_structure_score = 0.0
 
     if h1_count == 1:
@@ -184,14 +213,24 @@ def evaluate_question_readiness(
     elif h2_count >= 1:
         heading_structure_score += 5.0
 
-    # 5. Evidence quality & freshness (0-10 pts)
+    # 5. Evidence quality & specificity (0-10 pts)
     evidence_quality_score = 0.0
+    # Check for specific numbers, bullet points, steps, specifications
+    has_specifications = bool(re.search(r"\b(\d+(\.\d+)?%?|\$\d+|\d+\s*(days|months|hours|users|workflows|steps))\b", body_text_lower))
+    
     if snippets and len(snippets) >= 2:
-        evidence_quality_score = 10.0
+        evidence_quality_score = 7.0
     elif snippets:
-        evidence_quality_score = 6.0
+        evidence_quality_score = 4.0
     else:
-        evidence_quality_score = 2.0
+        evidence_quality_score = 1.0
+
+    if has_specifications:
+        evidence_quality_score += 3.0
+    else:
+        evidence_quality_score += 1.0
+
+    evidence_quality_score = min(10.0, evidence_quality_score)
 
     # Calculate Total Score (0-100)
     total_score = round(
@@ -211,29 +250,62 @@ def evaluate_question_readiness(
     # Missing subtopic recommendations
     if missing_subtopics:
         recommendations.append({
-            "issue": f"Missing critical subtopics: {', '.join(missing_subtopics[:3])}.",
-            "supporting_evidence": f"Expected coverage for {intent} intent lacked mentions of: {missing_subtopics[:3]}.",
-            "why_it_helps": "AI engines favor comprehensive coverage that answers related follow-up queries.",
-            "suggested_action": f"Expand the content on {best_page['url']} to explicitly address {', '.join(missing_subtopics[:3])}.",
+            "issue": f"Missing key subtopics: {', '.join(missing_subtopics[:3])}.",
+            "target_query": clean_q,
+            "supporting_evidence": f"Expected topical depth for '{intent}' intent lacked coverage of: {', '.join(missing_subtopics[:3])}.",
+            "identified_gap": f"Content on {best_page['url']} lacks specific details for: {', '.join(missing_subtopics[:3])}.",
+            "why_it_helps": "AI search engines prioritize pages that provide comprehensive, multi-angle coverage that answers related user questions.",
+            "suggested_action": f"Expand page content on {best_page['url']} with dedicated paragraphs discussing {', '.join(missing_subtopics[:3])}.",
             "priority": "medium",
             "estimated_effort": "medium",
             "is_ai_generated": False,
             "affected_page_url": best_page["url"],
+            "owner_confirmation_note": "Requires website owner to provide verified business details, specifications, or policies.",
         })
 
+    # Direct answer placement recommendation
     if not direct_answer_found or clarity_score < 18.0:
         recommendations.append({
-            "issue": "No concise, direct answer found near the top of the page.",
-            "supporting_evidence": f"Page {best_page['url']} lacks an explicit 1-2 sentence direct response.",
-            "why_it_helps": "Answer engines extract concise introductory sentences for AI overviews and featured snippets.",
-            "suggested_action": "Add an explicit, direct answer paragraph in the first 200 words under a descriptive heading.",
+            "issue": "No concise, direct answer found near the top of the relevant content.",
+            "target_query": clean_q,
+            "supporting_evidence": f"Primary matching page '{best_page['url']}' does not lead with a clear 1-2 sentence answer.",
+            "identified_gap": "Answer is either buried deep in the page or missing altogether.",
+            "why_it_helps": "Answer engines extract direct introductory sentences for AI Overviews, rich snippets, and voice search answers.",
+            "suggested_action": f"Add an explicit 1-2 sentence direct response within the first 200 words under heading '{clean_q}'.",
             "priority": "high",
             "estimated_effort": "low",
             "is_ai_generated": False,
             "affected_page_url": best_page["url"],
+            "owner_confirmation_note": "Requires website owner to confirm the concise summary text.",
         })
 
-    confidence = 0.85 if len(snippets) > 0 else 0.70
+    # Heading hierarchy recommendation
+    if h1_count == 0 or h2_count == 0:
+        recommendations.append({
+            "issue": "Sub-optimal heading hierarchy and semantic structure.",
+            "target_query": clean_q,
+            "supporting_evidence": f"Page '{best_page['url']}' contains {h1_count} H1 and {h2_count} H2 headings.",
+            "identified_gap": "Unclear topic framing makes it harder for crawlers and answer engines to determine topical relevance.",
+            "suggested_action": f"Add a single H1 framing the primary subject and use descriptive H2 headings like '## {clean_q_no_q}'.",
+            "priority": "low",
+            "estimated_effort": "low",
+            "is_ai_generated": False,
+            "affected_page_url": best_page["url"],
+            "owner_confirmation_note": None,
+        })
+
+    suggested_headings = [
+        f"## {clean_q}",
+        f"### Key Facts & Benefits of {clean_q_no_q}",
+        f"### Frequently Asked Questions About {clean_q_no_q}",
+    ]
+    suggested_schema = ["FAQPage"] if "how" in clean_q.lower() or "what" in clean_q.lower() else ["Article"]
+    if "cost" in clean_q.lower() or "price" in clean_q.lower():
+        suggested_schema.append("Product")
+    elif "service" in clean_q.lower():
+        suggested_schema.append("Service")
+
+    confidence = 0.88 if len(snippets) > 0 else 0.70
     explanation = (
         f"Analyzed {len(crawled_pages)} crawled pages. Best matching page was '{best_page['url']}'. "
         f"Score of {total_score}/100 reflects {len(snippets)} evidence snippets, {coverage_ratio*100:.0f}% subtopic coverage, "
@@ -258,4 +330,7 @@ def evaluate_question_readiness(
         confidence_level=confidence,
         explanation=explanation,
         recommendations=recommendations,
+        suggested_headings=suggested_headings,
+        suggested_schema_types=suggested_schema,
+        owner_confirmation_needed=True,
     )

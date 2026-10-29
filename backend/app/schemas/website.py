@@ -6,6 +6,8 @@ from typing import List, Optional
 class WebsiteBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     canonical_url: str = Field(..., description="Full canonical URL e.g. https://example.com")
+    description: Optional[str] = Field(default=None, description="Business or website description")
+    target_audience: Optional[str] = Field(default=None, description="Primary target audience or persona")
     brand_aliases: List[str] = Field(default_factory=list, description="Brand name variations")
     competitor_domains: List[str] = Field(default_factory=list, description="Competitor domains")
     robots_txt_respected: bool = True
@@ -20,6 +22,8 @@ class WebsiteCreate(WebsiteBase):
 class WebsiteUpdate(BaseModel):
     name: Optional[str] = None
     canonical_url: Optional[str] = None
+    description: Optional[str] = None
+    target_audience: Optional[str] = None
     brand_aliases: Optional[List[str]] = None
     competitor_domains: Optional[List[str]] = None
     robots_txt_respected: Optional[bool] = None

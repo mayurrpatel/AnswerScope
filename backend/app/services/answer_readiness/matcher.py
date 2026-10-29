@@ -48,6 +48,21 @@ def match_question_to_pages(question_text: str, crawled_pages: List[Dict[str, An
         heading_overlap = len(q_tokens.intersection(heading_tokens))
         score += heading_overlap * 2.5
 
+        # Structured data match (e.g. FAQPage questions)
+        structured_data = page.get("structured_data") or []
+        sd_text = ""
+        for sd in structured_data:
+            if isinstance(sd, dict):
+                main_entity = sd.get("mainEntity", [])
+                if isinstance(main_entity, list):
+                    for item in main_entity:
+                        if isinstance(item, dict):
+                            sd_text += " " + str(item.get("name", "")) + " " + str(item.get("acceptedAnswer", {}).get("text", ""))
+                sd_text += " " + str(sd.get("name", "")) + " " + str(sd.get("description", ""))
+        sd_tokens = set(tokenize(sd_text))
+        sd_overlap = len(q_tokens.intersection(sd_tokens))
+        score += sd_overlap * 3.0
+
         # Meta description match
         meta_desc = page.get("meta_description") or ""
         desc_tokens = set(tokenize(meta_desc))
@@ -75,32 +90,67 @@ def extract_evidence_snippets(question_text: str, page: Dict[str, Any], max_snip
     """
     body_text = page.get("body_text") or ""
     q_tokens = set(tokenize(question_text))
-    if not q_tokens or not body_text:
+    if not q_tokens:
+        return []
+
+    # Check structured data FAQ answers first if available
+    structured_data = page.get("structured_data") or []
+    sd_snippets = []
+    for sd in structured_data:
+        if isinstance(sd, dict) and "faq" in str(sd.get("@type", "")).lower():
+            main_entity = sd.get("mainEntity", [])
+            if isinstance(main_entity, list):
+                for item in main_entity:
+                    if isinstance(item, dict):
+                        q_name = item.get("name", "")
+                        ans = item.get("acceptedAnswer", {}).get("text", "")
+                        overlap = len(q_tokens.intersection(set(tokenize(q_name))))
+                        if overlap > 0 and ans:
+                            sd_snippets.append({
+                                "url": page.get("url"),
+                                "text": ans,
+                                "context": f"Schema FAQ: '{q_name}'",
+                                "score": 25.0,
+                            })
+
+    if not body_text and not sd_snippets:
         return []
 
     # Split into sentences
     sentences = re.split(r"(?<=[.!?])\s+", body_text)
     scored_sentences = []
 
-    for s in sentences:
+    for idx, s in enumerate(sentences):
         s_clean = s.strip()
-        if len(s_clean) < 20 or len(s_clean) > 400:
+        if len(s_clean) < 15 or len(s_clean) > 400:
             continue
-        s_tokens = set(tokenize(s_clean))
-        overlap = len(q_tokens.intersection(s_tokens))
+
+        # If sentence is an interrogative ending with ?, pull in the answering sentence
+        candidate_text = s_clean
+        if s_clean.endswith("?") and idx + 1 < len(sentences):
+            next_s = sentences[idx + 1].strip()
+            if len(next_s) >= 15:
+                candidate_text = f"{s_clean} {next_s}" if len(s_clean) < 60 else next_s
+
+        c_tokens = set(tokenize(candidate_text))
+        overlap = len(q_tokens.intersection(c_tokens))
         if overlap > 0:
-            density = overlap / (len(s_tokens) + 1e-5)
-            scored_sentences.append((s_clean, overlap, density))
+            density = overlap / (len(c_tokens) + 1e-5)
+            scored_sentences.append((candidate_text, overlap, density))
 
     scored_sentences.sort(key=lambda x: (x[1], x[2]), reverse=True)
 
-    results = []
-    for s_clean, overlap, density in scored_sentences[:max_snippets]:
-        results.append({
-            "url": page.get("url"),
-            "text": s_clean,
-            "context": f"Page title: {page.get('title') or 'Untitled'}",
-            "score": round(overlap * 10 + density * 5, 2)
-        })
+    results = list(sd_snippets)
+    for s_clean, overlap, density in scored_sentences:
+        if len(results) >= max_snippets:
+            break
+        # Avoid duplicate snippets
+        if not any(s_clean in r["text"] or r["text"] in s_clean for r in results):
+            results.append({
+                "url": page.get("url"),
+                "text": s_clean,
+                "context": f"Page title: {page.get('title') or 'Untitled'}",
+                "score": round(overlap * 10 + density * 5, 2)
+            })
 
-    return results
+    return results[:max_snippets]

@@ -9,3 +9,7 @@ dist/
 !.env.example
 *.log
 reports_tmp/
+
+*.db
+backend/app.db
+*.pdf

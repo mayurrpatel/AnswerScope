@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.db.session import get_db
 from app.models.website import Website
@@ -11,7 +11,7 @@ from app.schemas.report import ReportSummaryResponse
 from app.schemas.audit import AuditResponse
 from app.schemas.visibility import VisibilityJobResponse
 from app.schemas.competitor import CompetitorFindingResponse
-from app.services.reports.exporter import export_audit_to_csv, export_audit_to_pdf
+from app.services.reports.exporter import export_audit_to_csv, export_audit_to_pdf, export_audit_to_html
 
 router = APIRouter(prefix="/reports", tags=["Reports & Exports"])
 
@@ -56,11 +56,11 @@ def get_report_summary(website_id: str, db: Session = Depends(get_db)):
                 "priority": r.priority,
                 "estimated_effort": r.estimated_effort,
             }
-            for r in latest_audit.recommendations[:5]
+            for r in latest_audit.recommendations[:6]
         ]
 
     limitations = [
-        "Readiness scores assess content clarity and structured metadata on crawled pages, not guaranteed search engine rankings.",
+        "Readiness scores assess observable content clarity, heading structure, and structured metadata on successfully crawled pages, not guaranteed search engine rankings.",
         "Visibility metrics measure recorded observations from specified providers under current query terms and cannot represent every user.",
     ]
     if latest_vis and not latest_vis.is_live_provider:
@@ -70,7 +70,7 @@ def get_report_summary(website_id: str, db: Session = Depends(get_db)):
         website_id=website.id,
         website_name=website.name,
         canonical_url=website.canonical_url,
-        generated_at=datetime.utcnow(),
+        generated_at=datetime.now(timezone.utc),
         latest_audit=AuditResponse.model_validate(latest_audit) if latest_audit else None,
         latest_visibility=VisibilityJobResponse.model_validate(latest_vis) if latest_vis else None,
         competitor_gaps=[CompetitorFindingResponse.model_validate(g) for g in gaps],
@@ -99,6 +99,7 @@ def export_csv_endpoint(audit_id: str, db: Session = Depends(get_db)):
             "structured_data_present": qr.structured_data_present,
             "relevant_page_urls": qr.relevant_page_urls or [],
             "missing_subtopics": qr.missing_subtopics or [],
+            "suggested_headings": qr.suggested_headings or [],
             "confidence_level": qr.confidence_level,
         })
 
@@ -110,7 +111,7 @@ def export_csv_endpoint(audit_id: str, db: Session = Depends(get_db)):
         question_results=q_results,
     )
 
-    filename = f"audit-{audit.website.domain}-{audit.id[:8]}.csv"
+    filename = f"answerscope-{audit.website.domain}-{audit.id[:8]}.csv"
     return Response(
         content=csv_data,
         media_type="text/csv",
@@ -139,6 +140,7 @@ def export_pdf_endpoint(audit_id: str, db: Session = Depends(get_db)):
     recs = [
         {
             "priority": r.priority,
+            "estimated_effort": r.estimated_effort,
             "issue": r.issue,
             "suggested_action": r.suggested_action,
             "why_it_helps": r.why_it_helps,
@@ -155,9 +157,77 @@ def export_pdf_endpoint(audit_id: str, db: Session = Depends(get_db)):
         recommendations=recs,
     )
 
-    filename = f"audit-{audit.website.domain}-{audit.id[:8]}.pdf"
+    filename = f"answerscope-{audit.website.domain}-{audit.id[:8]}.pdf"
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/export/html/{audit_id}")
+def export_html_endpoint(audit_id: str, db: Session = Depends(get_db)):
+    audit = db.query(AnswerReadinessAudit).filter(AnswerReadinessAudit.id == audit_id).first()
+    if not audit:
+        raise HTTPException(status_code=404, detail="Audit not found")
+
+    q_results = []
+    for qr in audit.question_results:
+        q_text = qr.question.text if qr.question else "Unknown Question"
+        q_intent = qr.question.intent if qr.question else "unknown"
+        q_results.append({
+            "question_text": q_text,
+            "question_intent": q_intent,
+            "readiness_score": qr.readiness_score,
+            "status": qr.status,
+            "direct_answer_found": qr.direct_answer_found,
+            "direct_answer_snippet": qr.direct_answer_snippet,
+            "structured_data_present": qr.structured_data_present,
+            "relevant_page_urls": qr.relevant_page_urls or [],
+            "missing_subtopics": qr.missing_subtopics or [],
+            "suggested_headings": qr.suggested_headings or [],
+            "confidence_level": qr.confidence_level,
+        })
+
+    recs = [
+        {
+            "priority": r.priority,
+            "estimated_effort": r.estimated_effort,
+            "issue": r.issue,
+            "supporting_evidence": r.supporting_evidence,
+            "identified_gap": r.identified_gap,
+            "suggested_action": r.suggested_action,
+            "why_it_helps": r.why_it_helps,
+            "target_query": r.target_query,
+            "affected_page_url": r.affected_page_url,
+            "owner_confirmation_note": r.owner_confirmation_note,
+        }
+        for r in audit.recommendations
+    ]
+
+    pages_crawled = 0
+    crawl_errors = []
+    if audit.crawl_job:
+        pages_crawled = audit.crawl_job.pages_crawled
+        if audit.crawl_job.error_message:
+            crawl_errors.append(audit.crawl_job.error_message)
+
+    html_content = export_audit_to_html(
+        website_name=audit.website.name,
+        website_domain=audit.website.domain,
+        canonical_url=audit.website.canonical_url,
+        overall_score=audit.overall_score,
+        readiness_level=audit.readiness_level,
+        scoring_methodology=audit.scoring_methodology or {},
+        question_results=q_results,
+        recommendations=recs,
+        pages_analyzed_count=pages_crawled,
+        crawl_errors=crawl_errors,
+    )
+
+    filename = f"answerscope-{audit.website.domain}-{audit.id[:8]}.html"
+    return Response(
+        content=html_content,
+        media_type="text/html; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

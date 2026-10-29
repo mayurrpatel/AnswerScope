@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, Link } from "react-router-dom";
 import {
   Globe,
   HelpCircle,
@@ -9,6 +9,8 @@ import {
   Eye,
   Users2,
   FileText,
+  ShieldCheck,
+  Zap,
 } from "lucide-react";
 import { useState } from "react";
 import { applyTheme, getInitialTheme, THEME_STORAGE_KEY, type Theme } from "../../config/theme";
@@ -16,9 +18,9 @@ import { Button } from "../ui/Button";
 
 const nav = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/websites", label: "Websites", icon: Globe },
-  { to: "/questions", label: "Questions", icon: HelpCircle },
-  { to: "/audits", label: "Answer Readiness", icon: FileCheck2 },
+  { to: "/websites", label: "Websites & Audits", icon: Globe },
+  { to: "/questions", label: "Target Queries", icon: HelpCircle },
+  { to: "/audits", label: "Answer Readiness & Explorer", icon: FileCheck2 },
   { to: "/visibility", label: "AI Search Visibility", icon: Eye },
   { to: "/competitors", label: "Competitor Gaps", icon: Users2 },
   { to: "/reports", label: "Reports & Exports", icon: FileText },
@@ -39,62 +41,114 @@ export function AppShell() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col md:flex-row bg-background">
-      <aside className="border-b border-border bg-surface p-4 md:w-64 md:border-b-0 md:border-r flex flex-col justify-between shrink-0">
-        <div>
-          <div className="mb-6 flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center text-primary-contrast font-bold text-base shadow">
-              AS
-            </div>
-            <div>
-              <h1 className="text-sm font-bold text-text leading-tight">AI Search & Engine</h1>
-              <p className="text-xs text-muted">Visibility & Audit</p>
-            </div>
-          </div>
+    <div className="min-h-screen flex flex-col bg-background text-text">
+      {/* Top Studio Navigation Bar */}
+      <header className="sticky top-0 z-40 border-b border-border bg-surface/90 backdrop-blur-md transition-colors">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16 gap-3">
+            {/* Brand Logo & Product Identity */}
+            <Link to="/" className="flex items-center gap-2.5 shrink-0 group">
+              <div className="h-9 w-9 rounded-xl bg-primary flex items-center justify-center text-primary-contrast font-bold text-sm shadow-md transition-transform group-hover:scale-105">
+                <Zap size={18} className="fill-current" />
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-extrabold tracking-tight text-base text-text">AnswerScope</span>
+                  <span className="hidden sm:inline-block px-1.5 py-0.2 rounded text-[10px] font-semibold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20">
+                    Studio
+                  </span>
+                </div>
+                <p className="hidden sm:block text-[11px] text-muted -mt-0.5">AI Engine Visibility & Answer Audit</p>
+              </div>
+            </Link>
 
-          <nav aria-label="Main" className="flex flex-wrap gap-1 md:flex-col">
-            {nav.map(({ to, label, icon: Icon }) => (
-              <NavLink
-                key={to}
-                to={to}
-                end={to === "/"}
-                className={({ isActive }) =>
-                  `flex items-center gap-2.5 rounded-md px-3 py-2 text-xs font-medium transition ${
-                    isActive
-                      ? "bg-primary text-primary-contrast shadow-sm"
-                      : "text-muted hover:text-text hover:bg-background"
-                  }`
-                }
+            {/* Main Navigation Tabs */}
+            <nav
+              aria-label="Main"
+              className="flex items-center gap-1 overflow-x-auto py-1 scrollbar-none"
+            >
+              {nav.map(({ to, label, icon: Icon }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={to === "/"}
+                  className={({ isActive }) =>
+                    `flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+                      isActive
+                        ? "bg-primary text-primary-contrast shadow-sm font-semibold"
+                        : "text-muted hover:text-text hover:bg-surface"
+                    }`
+                  }
+                >
+                  <Icon size={14} aria-hidden />
+                  <span>{label}</span>
+                </NavLink>
+              ))}
+            </nav>
+
+            {/* Right Action & Utility Controls */}
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Security Shield Indicator */}
+              <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface border border-border text-[11px] text-muted font-medium">
+                <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
+                <ShieldCheck size={13} className="text-success" />
+                <span>SSRF Shield</span>
+              </div>
+
+              {/* Theme Toggle */}
+              <Button
+                variant="secondary"
+                onClick={toggle}
+                aria-label="Toggle theme"
+                className="p-2 h-9 w-9 flex items-center justify-center rounded-lg"
               >
-                <Icon size={16} aria-hidden /> <span>{label}</span>
-              </NavLink>
-            ))}
-          </nav>
-        </div>
-
-        <div className="hidden md:block pt-6 border-t border-border mt-6">
-          <div className="p-3 rounded-md bg-background border border-border text-xs text-muted">
-            <p className="font-semibold text-text mb-1">Audit Protocol</p>
-            <p className="leading-relaxed">Capability A (Readiness) & Capability B (Search Observations) are strictly separated.</p>
+                {theme === "light" ? <Moon size={15} /> : <Sun size={15} />}
+              </Button>
+            </div>
           </div>
         </div>
-      </aside>
+      </header>
 
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="flex justify-between items-center border-b border-border bg-surface px-6 py-3">
-          <div className="text-xs text-muted font-medium">
-            AI Search Visibility & Answer Engine Audit Platform
-          </div>
+      {/* Sub-Header / Protocol Bar */}
+      <div className="border-b border-border bg-surface/50 text-[11px] text-muted">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-1.5 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <Button variant="secondary" onClick={toggle} aria-label="Toggle theme" className="p-2">
-              {theme === "light" ? <Moon size={16} /> : <Sun size={16} />}
-            </Button>
+            <span className="font-semibold text-text">Protocol Integrity:</span>
+            <span>Observable Content & Technical Signals Only</span>
+            <span className="text-border">•</span>
+            <span className="text-muted">Strictly No Fabricated AI Citations or Synthetic Rankings</span>
           </div>
-        </header>
-        <main className="flex-1 p-6 max-w-7xl w-full mx-auto">
-          <Outlet />
-        </main>
+          <div className="hidden sm:flex items-center gap-3">
+            <span>Deterministic 0–100 Rubric</span>
+            <span className="text-border">•</span>
+            <span>Schema.org JSON-LD Verification</span>
+          </div>
+        </div>
       </div>
+
+      {/* Main Studio Viewport */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <Outlet />
+      </main>
+
+      {/* Studio Footer */}
+      <footer className="border-t border-border bg-surface py-5 mt-auto text-xs text-muted">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-text">AnswerScope</span>
+            <span>— AI Search Visibility & Answer Engine Audit Platform</span>
+          </div>
+          <div className="flex items-center gap-4 text-[11px]">
+            <span>FastAPI 0.115</span>
+            <span>•</span>
+            <span>React 19 + Vite</span>
+            <span>•</span>
+            <span>SQLite / PostgreSQL</span>
+            <span>•</span>
+            <span>MIT License</span>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

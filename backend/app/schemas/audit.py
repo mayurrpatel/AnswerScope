@@ -9,6 +9,16 @@ class AuditStartRequest(BaseModel):
     question_ids: Optional[List[str]] = None  # If None, audit all active target questions
 
 
+class QuickAuditRequest(BaseModel):
+    url: str = Field(..., description="Website canonical URL to analyze")
+    name: Optional[str] = Field(default=None, description="Website or business name")
+    description: Optional[str] = Field(default=None, description="Business description")
+    target_audience: Optional[str] = Field(default=None, description="Target audience")
+    questions: List[str] = Field(..., min_length=1, description="List of target user questions")
+    max_pages: int = Field(default=15, ge=1, le=50, description="Max pages to crawl and analyze")
+    respect_robots_txt: bool = True
+
+
 class EvidenceSnippet(BaseModel):
     url: str
     text: str
@@ -35,6 +45,9 @@ class QuestionAuditResultResponse(BaseModel):
     relevant_page_urls: List[str]
     evidence_snippets: List[Dict[str, Any]]
     missing_subtopics: List[str]
+    suggested_headings: Optional[List[str]] = None
+    suggested_schema_types: Optional[List[str]] = None
+    owner_confirmation_needed: Optional[bool] = False
     confidence_level: float
     explanation: Optional[str] = None
 
@@ -46,6 +59,8 @@ class RecommendationResponse(BaseModel):
     audit_id: str
     question_id: Optional[str] = None
     affected_page_url: Optional[str] = None
+    target_query: Optional[str] = None
+    identified_gap: Optional[str] = None
     issue: str
     supporting_evidence: str
     why_it_helps: str
@@ -53,6 +68,7 @@ class RecommendationResponse(BaseModel):
     priority: str
     estimated_effort: str
     is_ai_generated: bool
+    owner_confirmation_note: Optional[str] = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -75,6 +91,7 @@ class AuditResponse(BaseModel):
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
     created_at: datetime
+
     question_results: Optional[List[QuestionAuditResultResponse]] = None
     recommendations: Optional[List[RecommendationResponse]] = None
 

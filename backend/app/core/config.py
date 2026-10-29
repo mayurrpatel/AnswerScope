@@ -5,7 +5,7 @@ import os
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    app_name: str = "AI Search Visibility & Answer Engine Audit"
+    app_name: str = "AnswerScope — AI Search Visibility & Answer Engine Audit"
     app_version: str = "1.0.0"
     
     # Database: can be PostgreSQL or local SQLite for testing
@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     crawler_max_pages: int = 15
     crawler_max_depth: int = 2
     crawler_timeout_seconds: int = 10
-    crawler_user_agent: str = "AnswerEngineAuditor/1.0 (+https://example.com/bot)"
+    crawler_user_agent: str = "AnswerScopeAuditor/1.0 (+https://example.com/bot)"
 
 
 settings = Settings()

@@ -1,8 +1,9 @@
 import type { HTMLAttributes } from "react";
 
-type BadgeVariant = "success" | "warning" | "danger" | "info" | "secondary" | "primary";
+type BadgeVariant = "success" | "warning" | "danger" | "info" | "secondary" | "primary" | "default";
 
 const variants: Record<BadgeVariant, string> = {
+  default: "bg-surface text-muted border border-border",
   primary: "bg-primary/15 text-primary border border-primary/25",
   secondary: "bg-surface text-muted border border-border",
   success: "bg-success/15 text-success border border-success/30",

@@ -18,6 +18,7 @@ class ParsedPage:
         structured_data: List[Dict[str, Any]],
         internal_links: List[str],
         word_count: int,
+        images: List[Dict[str, str]] | None = None,
     ):
         self.url = url
         self.title = title
@@ -29,6 +30,7 @@ class ParsedPage:
         self.structured_data = structured_data
         self.internal_links = internal_links
         self.word_count = word_count
+        self.images = images or []
 
 
 def parse_html(url: str, html_content: str, base_domain: str) -> ParsedPage:
@@ -70,14 +72,16 @@ def parse_html(url: str, html_content: str, base_domain: str) -> ParsedPage:
             except Exception:
                 continue
 
-    # Clean body text (remove script, style, nav, footer, noscript)
-    for element in soup(["script", "style", "nav", "footer", "noscript", "svg", "header"]):
-        element.decompose()
-
-    body_text = soup.get_text(separator=" ", strip=True)
-    body_text = re.sub(r"\s+", " ", body_text)
-    words = re.findall(r"\w+", body_text)
-    word_count = len(words)
+    # Images extraction
+    images: List[Dict[str, str]] = []
+    for img in soup.find_all("img"):
+        src = img.get("src") or img.get("data-src")
+        alt = img.get("alt") or ""
+        if src:
+            images.append({
+                "src": urljoin(url, src),
+                "alt": alt.strip(),
+            })
 
     # Internal links
     internal_links: Set[str] = set()
@@ -95,6 +99,15 @@ def parse_html(url: str, html_content: str, base_domain: str) -> ParsedPage:
                 clean_link += f"?{parsed_link.query}"
             internal_links.add(clean_link)
 
+    # Clean body text (remove script, style, nav, footer, noscript, etc.)
+    for element in soup(["script", "style", "nav", "footer", "noscript", "svg", "header"]):
+        element.decompose()
+
+    body_text = soup.get_text(separator=" ", strip=True)
+    body_text = re.sub(r"\s+", " ", body_text)
+    words = re.findall(r"\w+", body_text)
+    word_count = len(words)
+
     return ParsedPage(
         url=url,
         title=title,
@@ -106,4 +119,5 @@ def parse_html(url: str, html_content: str, base_domain: str) -> ParsedPage:
         structured_data=structured_data,
         internal_links=list(internal_links),
         word_count=word_count,
+        images=images,
     )

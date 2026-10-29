@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Globe, Plus, Trash2, RefreshCw, CheckCircle2, AlertCircle } from "lucide-react";
+import { Globe, Plus, Trash2, RefreshCw, CheckCircle2, AlertCircle, Sparkles, FileCheck2 } from "lucide-react";
 
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
@@ -8,6 +8,7 @@ import { Input, Label } from "../components/ui/Input";
 import { Badge } from "../components/ui/Badge";
 import { EmptyState } from "../components/ui/EmptyState";
 import { LoadingSpinner } from "../components/ui/LoadingSpinner";
+import { QuickAuditModal } from "../components/QuickAuditModal";
 import {
   fetchWebsites,
   createWebsite,
@@ -21,12 +22,15 @@ export function Websites() {
   const [websites, setWebsites] = useState<Website[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showQuickModal, setShowQuickModal] = useState(false);
   const [crawlJobs, setCrawlJobs] = useState<Record<string, CrawlJob>>({});
   const [error, setError] = useState<string | null>(null);
 
   // Form state
   const [name, setName] = useState("");
   const [canonicalUrl, setCanonicalUrl] = useState("");
+  const [description, setDescription] = useState("");
+  const [targetAudience, setTargetAudience] = useState("");
   const [brandAliases, setBrandAliases] = useState("");
   const [competitors, setCompetitors] = useState("");
   const [maxPages, setMaxPages] = useState(15);
@@ -66,12 +70,16 @@ export function Websites() {
       await createWebsite({
         name,
         canonical_url: canonicalUrl,
+        description: description.trim() || undefined,
+        target_audience: targetAudience.trim() || undefined,
         brand_aliases: aliases,
         competitor_domains: compDomains,
         max_crawl_pages: maxPages,
       });
       setName("");
       setCanonicalUrl("");
+      setDescription("");
+      setTargetAudience("");
       setBrandAliases("");
       setCompetitors("");
       setShowAddForm(false);
@@ -99,33 +107,42 @@ export function Websites() {
     try {
       const job = await startCrawl(site.id, site.max_crawl_pages);
       setCrawlJobs((prev) => ({ ...prev, [site.id]: job }));
-      alert(`Crawl job started for ${site.domain}! Pages will be extracted in the background.`);
       setTimeout(() => loadWebsites(), 2000);
     } catch (err: any) {
-      alert(`Could not start crawl: ${err?.response?.data?.detail || err.message}`);
+      alert(`Crawl failed to start: ${err?.response?.data?.detail || err.message}`);
     }
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center border-b border-border pb-4">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-border pb-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-text">Registered Websites</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-text">Websites & Audits</h1>
           <p className="text-sm text-muted mt-1">
-            Manage your verified domains, brand aliases, and competitor benchmarks.
+            Manage tracked domains, crawl restrictions, and run comprehensive answer readiness audits.
           </p>
         </div>
-        <Button
-          variant={showAddForm ? "secondary" : "primary"}
-          onClick={() => setShowAddForm(!showAddForm)}
-          className="flex items-center gap-1.5"
-        >
-          {showAddForm ? "Cancel" : <><Plus className="w-4 h-4" /> Add Website</>}
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button
+            variant="secondary"
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="flex items-center gap-1.5 text-xs"
+          >
+            <Plus className="w-3.5 h-3.5" /> Manual Website Entry
+          </Button>
+          <Button
+            variant="primary"
+            onClick={() => setShowQuickModal(true)}
+            className="flex items-center gap-1.5 text-xs"
+          >
+            <Sparkles className="w-3.5 h-3.5" /> Guided Quick Audit
+          </Button>
+        </div>
       </div>
 
       {error && (
-        <div className="p-3 rounded-md border border-danger/30 bg-danger/10 text-danger text-sm flex items-center gap-2">
+        <div className="p-4 rounded-md bg-danger/10 border border-danger/20 text-danger text-xs flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{error}</span>
         </div>
@@ -138,21 +155,40 @@ export function Websites() {
           <form onSubmit={handleAddWebsite} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label>Brand / Website Name</Label>
+                <Label>Brand / Website Name *</Label>
                 <Input
                   required
-                  placeholder="e.g. Acme Cloud Analytics"
+                  placeholder="e.g. NexusFlow Automation"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                 />
               </div>
               <div>
-                <Label>Canonical URL</Label>
+                <Label>Canonical URL *</Label>
                 <Input
                   required
                   placeholder="https://example.com"
                   value={canonicalUrl}
                   onChange={(e) => setCanonicalUrl(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label>Business Description (Optional)</Label>
+                <Input
+                  placeholder="Core offerings and product scope"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label>Target Audience (Optional)</Label>
+                <Input
+                  placeholder="e.g. Operations leads, IT directors"
+                  value={targetAudience}
+                  onChange={(e) => setTargetAudience(e.target.value)}
                 />
               </div>
             </div>
@@ -213,80 +249,89 @@ export function Websites() {
             description="Add your first website to start crawling pages and auditing answer readiness."
             icon={<Globe className="w-8 h-8 text-primary" />}
             action={
-              <Button variant="primary" onClick={() => setShowAddForm(true)}>
-                Add Website
-              </Button>
+              <div className="flex gap-2 justify-center mt-2">
+                <Button variant="secondary" onClick={() => setShowQuickModal(true)}>
+                  Guided Quick Audit
+                </Button>
+                <Button variant="primary" onClick={() => setShowAddForm(true)}>
+                  Add Website Manually
+                </Button>
+              </div>
             }
           />
         </Card>
       ) : (
-        <div className="grid grid-cols-1 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {websites.map((site) => (
-            <Card key={site.id} className="p-5 bg-surface border-border">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-base font-bold text-text">{site.name}</h3>
-                    <Badge variant="primary">{site.domain}</Badge>
-                  </div>
-                  <p className="text-xs text-muted font-mono">{site.canonical_url}</p>
-
-                  <div className="flex flex-wrap gap-1.5 pt-2">
-                    {site.brand_aliases?.map((alias, idx) => (
-                      <Badge key={idx} variant="secondary">
-                        Alias: {alias}
-                      </Badge>
-                    ))}
-                    {site.competitor_domains?.map((comp, idx) => (
-                      <Badge key={idx} variant="warning">
-                        Comp: {comp}
-                      </Badge>
-                    ))}
-                  </div>
+            <Card key={site.id} className="p-5 bg-surface border-border flex flex-col justify-between">
+              <div>
+                <div className="flex justify-between items-start gap-2 mb-2">
+                  <h3 className="font-bold text-text text-base leading-tight">{site.name}</h3>
+                  <Badge variant={site.is_active ? "success" : "default"} className="text-[10px]">
+                    {site.is_active ? "Active" : "Paused"}
+                  </Badge>
                 </div>
+                <p className="text-xs font-mono text-muted mb-3 break-all">{site.canonical_url}</p>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    variant="secondary"
-                    onClick={() => handleCrawl(site)}
-                    className="flex items-center gap-1.5 text-xs"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5 text-primary" />
-                    <span>Crawl Pages</span>
-                  </Button>
+                {site.description && (
+                  <p className="text-xs text-muted mb-3 line-clamp-2">{site.description}</p>
+                )}
 
-                  <Link to={`/questions?website_id=${site.id}`}>
-                    <Button variant="secondary" className="text-xs">
-                      Questions
-                    </Button>
-                  </Link>
-
-                  <Link to={`/audits?website_id=${site.id}`}>
-                    <Button variant="primary" className="text-xs">
-                      Run Audit
-                    </Button>
-                  </Link>
-
-                  <button
-                    onClick={() => handleDelete(site.id)}
-                    className="p-2 text-muted hover:text-danger rounded-md transition"
-                    title="Delete Website"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                <div className="space-y-1 text-xs text-muted">
+                  <div className="flex justify-between">
+                    <span>Max Pages Crawl:</span>
+                    <span className="font-medium text-text">{site.max_crawl_pages}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Robots.txt Enforced:</span>
+                    <span className="font-medium text-text">{site.robots_txt_respected ? "Yes" : "No"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Last Crawled:</span>
+                    <span className="font-medium text-text">
+                      {site.last_crawled_at ? new Date(site.last_crawled_at).toLocaleDateString() : "Never"}
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              {site.last_crawled_at && (
-                <div className="mt-3 pt-3 border-t border-border flex items-center gap-2 text-xs text-muted">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-success" />
-                  <span>Last crawled: {new Date(site.last_crawled_at).toLocaleString()}</span>
+              <div className="pt-4 border-t border-border mt-4 flex items-center justify-between gap-2">
+                <div className="flex gap-1.5">
+                  <Link to={`/audits?website_id=${site.id}`}>
+                    <Button variant="secondary" className="p-2 text-xs" title="View Audits">
+                      <FileCheck2 size={14} />
+                    </Button>
+                  </Link>
+                  <Button
+                    variant="secondary"
+                    onClick={() => handleCrawl(site)}
+                    className="p-2 text-xs"
+                    title="Crawl Pages"
+                  >
+                    <RefreshCw size={14} />
+                  </Button>
                 </div>
-              )}
+
+                <Button
+                  variant="secondary"
+                  onClick={() => handleDelete(site.id)}
+                  className="p-2 text-xs text-danger hover:bg-danger/10"
+                  title="Delete Website"
+                >
+                  <Trash2 size={14} />
+                </Button>
+              </div>
             </Card>
           ))}
         </div>
       )}
+
+      {/* Quick Audit Modal */}
+      <QuickAuditModal
+        isOpen={showQuickModal}
+        onClose={() => setShowQuickModal(false)}
+        onSuccess={() => loadWebsites()}
+      />
     </div>
   );
 }

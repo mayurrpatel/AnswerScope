@@ -6,7 +6,7 @@ import App from "./App";
 vi.mock("./services/api", () => ({
   fetchHealth: vi.fn().mockResolvedValue({
     status: "ok",
-    service: "AI Search Visibility API",
+    service: "AnswerScope API",
     version: "1.0.0",
     database: "ok",
   }),
@@ -82,13 +82,13 @@ test("renders navigation and overview metrics", async () => {
   // Check navigation
   expect(screen.getByRole("navigation", { name: "Main" })).toBeInTheDocument();
   expect(screen.getByText("Dashboard")).toBeInTheDocument();
-  expect(screen.getByText("Websites")).toBeInTheDocument();
-  expect(screen.getByText("Questions")).toBeInTheDocument();
-  expect(screen.getByText("Answer Readiness")).toBeInTheDocument();
+  expect(screen.getByText("Websites & Audits")).toBeInTheDocument();
+  expect(screen.getByText("Target Queries")).toBeInTheDocument();
+  expect(screen.getByText("Answer Readiness & Explorer")).toBeInTheDocument();
   expect(screen.getByText("AI Search Visibility")).toBeInTheDocument();
 
   // Check Dashboard headings
-  expect(await screen.findByText("Platform Overview")).toBeInTheDocument();
-  expect(screen.getByText("Website Content Answer-Readiness")).toBeInTheDocument();
-  expect(screen.getByText("AI Search & Engine Visibility (Provider Observations)")).toBeInTheDocument();
+  expect(await screen.findByText("AnswerScope Dashboard")).toBeInTheDocument();
+  expect(screen.getByText("Content & Technical Quality Metrics")).toBeInTheDocument();
+  expect(screen.getByText("Content-Readiness Across Recent Audits")).toBeInTheDocument();
 });
