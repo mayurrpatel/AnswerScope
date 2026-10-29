@@ -50,3 +50,14 @@ app.include_router(visibility.router, prefix="/api")
 app.include_router(competitors.router, prefix="/api")
 app.include_router(reports.router, prefix="/api")
 app.include_router(sample_site.router, prefix="/api")
+
+
+@app.get("/", tags=["Root"])
+def root():
+    return {
+        "name": settings.app_name,
+        "version": settings.app_version,
+        "docs": "/docs",
+        "health": "/api/health",
+        "status": "online",
+    }
